@@ -1,0 +1,46 @@
+image: docker:19.03.10
+
+services:
+  - docker:dind
+
+before_script:
+  - apk add --no-cache curl jq python py-pip bash gettext
+  - pip install awscli
+  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+  - aws configure set region $AWS_DEFAULT_REGION
+  - aws sts get-caller-identity
+  - docker login -u AWS -p $(aws ecr get-login-password --region $AWS_DEFAULT_REGION) $DOCKER_REGISTRY
+
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  script:
+    - IMAGE_TAG="$(echo $CI_COMMIT_SHA | head -c 8)"
+    - echo "Building image..."
+    - docker build -t $REPOSITORY_URL:latest .
+    - echo "Tagging image..."
+    - docker tag $REPOSITORY_URL:latest $REPOSITORY_URL:$IMAGE_TAG
+    - echo "Pushing image..."
+    - docker push $REPOSITORY_URL:latest
+    - docker push $REPOSITORY_URL:$IMAGE_TAG
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  script:
+    - curl -o kubectl https://amazon-eks.s3.us-west-2.amazonaws.com/1.18.9/2020-11-02/bin/linux/amd64/kubectl
+    - chmod +x ./kubectl
+    - mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$PATH:$HOME/bin
+    - kubectl version --short --client
+    - aws eks --region $AWS_DEFAULT_REGION update-kubeconfig --name $AWS_CLUSTER_NAME
+    - envsubst < manifest.yaml | kubectl apply -f -
+    - kubectl get svc
+    - echo "Deployed successfully."
+  only:
+    - main
+

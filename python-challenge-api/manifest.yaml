@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: python-challenge
+  name: python-challenge
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: python-challenge
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: python-challenge
+    spec:
+      containers:
+      - image: $REPOSITORY_URL:latest
+        name: python-challenge
+        imagePullPolicy: Always
+        resources: {}
+        ports:
+          - containerPort: 5000 
+status: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-challenge-loadbalancer
+spec:
+  type: LoadBalancer
+  selector:
+    app: python-challenge
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
